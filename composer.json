@@ -1,0 +1,30 @@
+{
+    "name": "consatan/xml",
+    "description": "A simple XML tools",
+    "keywords": ["php", "xml", "xmlloader"],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Chopin Ngo",
+            "email": "consatan@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.0",
+        "ext-simplexml": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": ">5.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Consatan\\XML\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Consatan\\XML\\": "tests/"
+        }
+    }
+}
