@@ -20,9 +20,37 @@ class XMLLoader implements XMLLoaderInterface
     protected $xml = null;
 
     /**
+     * raw xml string
+     *
+     * @var string
+     */
+    protected $raw = '';
+
+    /**
+     * nocdata
+     *
+     * @var bool
+     */
+    protected $nocdata = false;
+
+    /**
+     * Empty string node placeholder
+     *
+     * @var string'
+     */
+    protected $placeholder = '__THIS_IS_AN_EMPTY_STRING_NODE__';
+
+    /**
+     * options
+     *
+     * @var int
+     */
+    protected $options = 0;
+
+    /**
      * 初始化 XML 对象
      *
-     * @param   mixed   $xml        XML字符串或实例化后的 SimpleXMLElement 对象
+     * @param   mixed   $xml        XML字符串或xml文件路径或实例化后的 SimpleXMLElement 对象
      * @param   string  $charset    ('UTF-8') XML字符串的字符集，设置此
      *                              参数将自动将字符串转换成 UTF-8 字符集，如果设置为空
      *                              ('' 或 null 或 false)，则根据 self::getEncoding 自动判断字符集
@@ -33,17 +61,38 @@ class XMLLoader implements XMLLoaderInterface
     public function __construct($xml, string $charset = 'UTF-8', int $options = LIBXML_NOCDATA)
     {
         if (is_string($xml)) {
-            $this->xml = $xml;
+            $xml = trim($xml);
+            // $xml 为文件路径
+            if ($xml[0] !== '<') {
+                $content = @file_get_contents($xml);
+                if ($content === false) {
+                    throw new XMLException("file_get_contents($xml): failed to open stream: No such file or directory");
+                }
+                $xml = $content;
+            }
+
             $charset = trim($charset);
             // 如果有提供字符集参数，则转换为 UTF-8
             if ($charset !== 'UTF-8') {
                 $charset = $charset === '' ? self::getEncoding($xml) : $charset;
 
-                $this->xml = @iconv($charset, 'UTF-8', $xml);
-                if ($this->xml === false) {
+                $xml = @iconv($charset, 'UTF-8', $xml);
+                if ($xml === false) {
                     throw new XMLException("转换 XML 字符集($charset => UTF-8)失败。");
                 }
             }
+
+            $this->raw = $xml;
+            $this->options = $options;
+            $this->nocdata = $options & LIBXML_NOCDATA;
+            // 使用毫秒级时间戳使得占位符不至于和原始字符串产生冲突
+            $this->placeholder .= intval(microtime(true) * 1000);
+            // <xml><root><text><![CDATA[]]></text><other><![CDATA[123]]></other></root></xml>
+            // simplexml_load_string 函数会将 text 节点转换为空数组节点
+            // 此处将空的字符串节点使用 $this->placeholder 进行替换
+            $this->xml = $this->nocdata
+                ? preg_replace('/>\s*<!\[CDATA\[\s*\]\]>\s*</', '><![CDATA[' . $this->placeholder . ']]><', $xml)
+                : $xml;
 
             // 开启 libxml 错误捕获
             libxml_use_internal_errors(true);
@@ -51,7 +100,6 @@ class XMLLoader implements XMLLoaderInterface
             libxml_clear_errors();
 
             $this->xml = simplexml_load_string($this->xml, null, $options);
-
             if ($this->xml === false) {
                 $error = libxml_get_errors();
                 // 清除 libxml 错误信息，避免错误信息影响到其他程序
@@ -101,6 +149,12 @@ class XMLLoader implements XMLLoaderInterface
      */
     public function getXML(): SimpleXMLElement
     {
+        if ($this->nocdata) {
+            if (is_string($this->raw)) {
+                $this->raw = simplexml_load_string($this->raw, null, $this->options);
+            }
+            return $this->raw;
+        }
         return $this->xml;
     }
 
@@ -129,7 +183,15 @@ class XMLLoader implements XMLLoaderInterface
      */
     protected function to(bool $assoc = true)
     {
-        if (false === ($to = @json_encode($this->xml)) || false === ($to = @json_decode($to, $assoc))) {
+        if (false === ($to = @json_encode($this->xml))) {
+            throw new XMLException('SimpleXMLElement 转换为 ' . ($assoc ? 'Array' : 'Object')
+                .  ' 时失败：' . json_last_error_msg() . '。');
+        }
+
+        // 将占位符替换撑空字符串
+        $to = $this->nocdata ? str_replace($this->placeholder, '', $to) : $to;
+
+        if (false === ($to = @json_decode($to, $assoc))) {
             throw new XMLException('SimpleXMLElement 转换为 ' . ($assoc ? 'Array' : 'Object')
                 .  ' 时失败：' . json_last_error_msg() . '。');
         }
