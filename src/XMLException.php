@@ -7,6 +7,6 @@ namespace Consatan\XML;
  *
  * @author Chopin Ngo <consatan@gmail.com>
  */
-class XMLException implements \Exception
+class XMLException extends \Exception
 {
 }

@@ -29,4 +29,13 @@ class XMLLoaderTest extends \PHPUnit_Framework_TestCase
         // 空字符串节点被解析为空数组
         $this->assertEquals(new SimpleXMLElement('<xml></xml>'), $simplexml->root->text[0]);
     }
+
+    /**
+     * @expectedException Consatan\XML\XMLException
+     *
+     */
+    public function testException()
+    {
+        $xml = new XMLLoader('<xml><text>abc</xml>');
+    }
 }
